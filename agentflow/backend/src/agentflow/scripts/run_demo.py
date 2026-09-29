@@ -20,6 +20,16 @@ import asyncio
 import json
 import sys
 
+# Ensure UTF-8 output on Windows consoles to prevent cp1252 charmap encoding errors
+if sys.platform == "win32":
+    try:
+        if hasattr(sys.stdout, "reconfigure"):
+            sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+        if hasattr(sys.stderr, "reconfigure"):
+            sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+    except Exception:
+        pass
+
 # Configure logging before any imports that use structlog
 import agentflow.logging_config  # noqa: F401  (side effect: configures structlog)
 
@@ -40,16 +50,22 @@ async def main(
     topic: str,
     goal: str,
     model: str | None,
+    mock: bool = False,
 ) -> None:
     """Execute the demo workflow and print results."""
 
-    print("\n" + "═" * 70)
-    print("  🤖  AgentFlow — Phase 1 Demo")
+    print("\n" + "=" * 70)
+    print("  [*] AgentFlow - Phase 1 Demo")
     print("  Lead Research & Qualified Outreach Pipeline")
-    print("═" * 70 + "\n")
+    if mock:
+        print("  [MOCK MODE ACTIVE - Offline DAG Simulation]")
+    print("=" * 70 + "\n")
 
     # Register all built-in agents
     register_all_builtin_agents()
+
+    if mock:
+        _register_mock_agents(lead_name, company)
 
     # Build workflow
     workflow = build_demo_workflow()
@@ -58,11 +74,13 @@ async def main(
     if model:
         for node in workflow.nodes:
             node.config.model = model
-        print(f"🔧 Using model: {model}\n")
+        print(f"[*] Using model: {model}\n")
+    elif mock:
+        print("[*] Using model: mock/synthetic-agent\n")
     else:
-        print(f"🔧 Using model: {settings.default_model}\n")
+        print(f"[*] Using model: {settings.default_model}\n")
 
-    print(f"📋 Workflow: {workflow.name}")
+    print(f"[*] Workflow: {workflow.name}")
     print(f"   Nodes: {len(workflow.nodes)} ({', '.join(n.id for n in workflow.nodes)})")
     print(f"   Budget: ${workflow.global_max_cost_usd} max\n")
 
@@ -74,11 +92,11 @@ async def main(
         "goal": goal,
     }
 
-    print(f"🚀 Starting run...")
+    print(f"[*] Starting run...")
     print(f"   Lead: {lead_name}")
     print(f"   Company: {company}")
     print(f"   Goal: {goal}")
-    print("─" * 70 + "\n")
+    print("-" * 70 + "\n")
 
     # Execute
     run = await run_workflow(
@@ -87,9 +105,9 @@ async def main(
     )
 
     # ── Print summary ──────────────────────────────────────────────────────────
-    status_icon = "✅" if run.status == RunStatus.COMPLETED else "❌"
-    print(f"\n{'─' * 70}")
-    print(f"{status_icon} Run {str(run.id)[:8]}... — {run.status.value.upper()}")
+    status_icon = "[OK]" if run.status == RunStatus.COMPLETED else "[FAIL]"
+    print(f"\n{'-' * 70}")
+    print(f"{status_icon} Run {str(run.id)[:8]}... - {run.status.value.upper()}")
     if run.error:
         print(f"   Error: {run.error}")
     print(f"   Total tokens: {run.total_tokens:,}")
@@ -98,19 +116,19 @@ async def main(
         (run.completed_at - run.started_at) if run.completed_at and run.started_at else 0
     )
     print(f"   Duration:     {duration:.1f}s")
-    print(f"\n{'═' * 70}")
-    print("  📊 Per-Node Execution Log")
-    print("═" * 70)
+    print(f"\n{'=' * 70}")
+    print("  Execution Log (Per-Node)")
+    print("=" * 70)
 
     for nr in run.node_runs:
         status_sym = {
-            NodeRunStatus.COMPLETED: "✅",
-            NodeRunStatus.FAILED: "❌",
-            NodeRunStatus.SKIPPED: "⏭️ ",
-            NodeRunStatus.PENDING: "⏸️ ",
-        }.get(nr.status, "❓")
+            NodeRunStatus.COMPLETED: "[OK]",
+            NodeRunStatus.FAILED: "[FAIL]",
+            NodeRunStatus.SKIPPED: "[SKIP]",
+            NodeRunStatus.PENDING: "[PEND]",
+        }.get(nr.status, "[?]")
 
-        print(f"\n{status_sym} {nr.node_id} ({nr.agent_type.value}) — attempt {nr.attempt}")
+        print(f"\n{status_sym} {nr.node_id} ({nr.agent_type.value}) - attempt {nr.attempt}")
         print(f"   Status:   {nr.status.value}")
         print(f"   Duration: {nr.duration_ms}ms")
         print(f"   Tokens:   {nr.prompt_tokens + nr.completion_tokens}")
@@ -125,7 +143,7 @@ async def main(
             print(f"   Output:")
             _print_output(nr.node_id, nr.output)
 
-    print(f"\n{'═' * 70}\n")
+    print(f"\n{'=' * 70}\n")
 
 
 def _print_output(node_id: str, output: dict) -> None:
@@ -161,7 +179,7 @@ def _print_output(node_id: str, output: dict) -> None:
         if improvements:
             print(f"     Improvements:")
             for imp in improvements[:3]:
-                print(f"       • {imp}")
+                print(f"       - {imp}")
 
     else:
         # Generic: just print the dict compactly
@@ -169,6 +187,149 @@ def _print_output(node_id: str, output: dict) -> None:
             print(f"     {json.dumps(output, indent=6, default=str)[:400]}")
         except Exception:
             print(f"     {str(output)[:400]}")
+
+
+def _register_mock_agents(lead_name: str, company: str) -> None:
+    """Register mock agent implementations for offline / zero-API-cost simulation."""
+    from agentflow.core.agents.base import BaseAgent
+    from agentflow.core.agents.registry import agent_registry
+    from agentflow.core.schemas.workflow import (
+        AgentMessage,
+        AgentType,
+        MessageMetadata,
+        NodeRunStatus,
+    )
+
+    class MockResearchAgent(BaseAgent):
+        type_key = AgentType.RESEARCH
+
+        async def run(self, input_data, config, context, tools):
+            data = {
+                "summary": f"{company} is a high-growth cloud company expanding developer tooling and enterprise workflow automation.",
+                "key_findings": [
+                    {
+                        "title": "Enterprise Growth",
+                        "detail": f"{company} recently scaled its platform for enterprise integrations.",
+                        "relevance_score": 0.95,
+                    },
+                    {
+                        "title": "Decision Maker",
+                        "detail": f"{lead_name} spearheads strategic infrastructure and AI initiatives.",
+                        "relevance_score": 0.92,
+                    },
+                    {
+                        "title": "Tech Modernization",
+                        "detail": "Prioritizing modular agentic architectures and API security.",
+                        "relevance_score": 0.88,
+                    },
+                ],
+                "confidence": 0.94,
+                "market_signals": [
+                    "Series B scaling",
+                    "Hiring enterprise engineers",
+                    "Active API expansion",
+                ],
+            }
+            return AgentMessage(
+                run_id=context.run.id,
+                node_id="research",
+                status=NodeRunStatus.COMPLETED,
+                data=data,
+                metadata=MessageMetadata(
+                    prompt_tokens=180,
+                    completion_tokens=110,
+                    total_tokens=290,
+                    cost_usd=0.0004,
+                    model="mock-model",
+                ),
+            )
+
+    class MockClassifierAgent(BaseAgent):
+        type_key = AgentType.ROUTER
+
+        async def run(self, input_data, config, context, tools):
+            data = {
+                "score": 9.2,
+                "category": "High Priority Tier-1 Prospect",
+                "branch": "qualified",
+                "reasoning": f"{company} strongly matches ICP with high executive relevance and active budget allocation.",
+                "priority": "high",
+            }
+            return AgentMessage(
+                run_id=context.run.id,
+                node_id="classifier",
+                status=NodeRunStatus.COMPLETED,
+                data=data,
+                metadata=MessageMetadata(
+                    prompt_tokens=120,
+                    completion_tokens=60,
+                    total_tokens=180,
+                    cost_usd=0.0002,
+                    model="mock-model",
+                ),
+            )
+
+    class MockWriterAgent(BaseAgent):
+        type_key = AgentType.WRITER
+
+        async def run(self, input_data, config, context, tools):
+            body = (
+                f"Hi {lead_name},\n\n"
+                f"I've been following {company}'s rapid scaling in enterprise developer tooling. "
+                f"Engineering teams often struggle when connecting autonomous AI agents into reliable, production workflows.\n\n"
+                f"With NodeX, we give teams deterministic topological DAG orchestration, structured output validation, "
+                f"and full token telemetry out of the box.\n\n"
+                f"Would you be open to a quick 10-minute demo next Tuesday?\n\n"
+                f"Best regards,\nNodeX Team"
+            )
+            data = {
+                "subject": f"Modernizing Agentic Workflows at {company}",
+                "body": body,
+                "tone": "consultative and technical",
+                "word_count": len(body.split()),
+            }
+            return AgentMessage(
+                run_id=context.run.id,
+                node_id="writer",
+                status=NodeRunStatus.COMPLETED,
+                data=data,
+                metadata=MessageMetadata(
+                    prompt_tokens=240,
+                    completion_tokens=140,
+                    total_tokens=380,
+                    cost_usd=0.0005,
+                    model="mock-model",
+                ),
+            )
+
+    class MockReviewerAgent(BaseAgent):
+        type_key = AgentType.REVIEWER
+
+        async def run(self, input_data, config, context, tools):
+            data = {
+                "score": 9.4,
+                "passed": True,
+                "feedback": "Outstanding cold email. Highly personalized, addresses specific pain points, clear value proposition, and low-friction call to action.",
+                "improvements": ["Consider adding a one-line customer case study metric."],
+            }
+            return AgentMessage(
+                run_id=context.run.id,
+                node_id="reviewer",
+                status=NodeRunStatus.COMPLETED,
+                data=data,
+                metadata=MessageMetadata(
+                    prompt_tokens=190,
+                    completion_tokens=70,
+                    total_tokens=260,
+                    cost_usd=0.0003,
+                    model="mock-model",
+                ),
+            )
+
+    agent_registry.register(AgentType.RESEARCH, MockResearchAgent())
+    agent_registry.register(AgentType.ROUTER, MockClassifierAgent())
+    agent_registry.register(AgentType.WRITER, MockWriterAgent())
+    agent_registry.register(AgentType.REVIEWER, MockReviewerAgent())
 
 
 def parse_args() -> argparse.Namespace:
@@ -188,6 +349,11 @@ def parse_args() -> argparse.Namespace:
         default=None,
         help="LLM model override (e.g. 'gpt-4o', 'claude-3-5-sonnet-20241022')",
     )
+    parser.add_argument(
+        "--mock",
+        action="store_true",
+        help="Run in offline mock mode (simulates agents without live LLM API calls)",
+    )
     return parser.parse_args()
 
 
@@ -200,5 +366,6 @@ if __name__ == "__main__":
             topic=args.topic,
             goal=args.goal,
             model=args.model,
+            mock=args.mock,
         )
     )
