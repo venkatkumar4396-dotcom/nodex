@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from typing import Any
+
 from pydantic import BaseModel, Field
 
 
@@ -19,3 +20,17 @@ class ToolResult(BaseModel):
     data: Any = None
     error: str | None = None
     metadata: dict[str, Any] = Field(default_factory=dict)
+
+
+class ToolExecutionStep(BaseModel):
+    """A single step in an agent's reasoning & tool execution trace."""
+    round: int
+    thought: str | None = None
+    tool_name: str
+    arguments: dict[str, Any] = Field(default_factory=dict)
+    observation: str | None = None
+    success: bool = True
+    duration_ms: int = 0
+    error: str | None = None
+    status: str = "completed"  # completed, suggested_only, awaiting_approval, timed_out, duplicate_blocked
+

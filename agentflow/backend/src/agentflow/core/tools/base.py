@@ -24,6 +24,7 @@ class BaseTool(ABC):
     name: ClassVar[str]
     description: ClassVar[str]
     parameters_schema: ClassVar[dict[str, Any]]  # JSON Schema
+    is_destructive: ClassVar[bool] = False
 
     @abstractmethod
     async def execute(self, arguments: dict[str, Any]) -> ToolResult:

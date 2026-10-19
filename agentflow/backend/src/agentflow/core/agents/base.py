@@ -70,14 +70,15 @@ class BaseAgent(ABC):
     """
 
     type_key: ClassVar[AgentType]
+    allowed_tools: ClassVar[set[str] | None] = None  # None = unrestricted; set = least-privilege allowlist
 
     @abstractmethod
     async def run(
         self,
         input_data: dict[str, Any],
         config: NodeConfig,
-        context: "RunContext",
-        tools: list["BaseTool"],
+        context: RunContext,
+        tools: list[BaseTool],
     ) -> AgentMessage:
         """
         Execute the agent's logic.
@@ -101,8 +102,11 @@ class BaseAgent(ABC):
         """Validate that subclasses declare type_key."""
         super().__init_subclass__(**kwargs)
         # Skip validation for abstract intermediate classes
-        if ABC not in cls.__bases__ and not getattr(cls, "__abstractmethods__", None):
-            if not hasattr(cls, "type_key"):
-                raise TypeError(
-                    f"{cls.__name__} must define `type_key: ClassVar[AgentType]`"
-                )
+        if (
+            ABC not in cls.__bases__
+            and not getattr(cls, "__abstractmethods__", None)
+            and not hasattr(cls, "type_key")
+        ):
+            raise TypeError(
+                f"{cls.__name__} must define `type_key: ClassVar[AgentType]`"
+            )

@@ -15,10 +15,9 @@ from uuid import UUID, uuid4
 
 from pydantic import BaseModel, Field
 
-
-# ─────────────────────────────────────────────────────────────────────────────
+# 
 # Enums
-# ─────────────────────────────────────────────────────────────────────────────
+#
 
 
 class AgentType(str, Enum):
@@ -27,34 +26,45 @@ class AgentType(str, Enum):
     Adding a new agent = add an entry here + create the class + register it.
     No engine changes required.
     """
-    # ── Control / routing ─────────────────────────────────────────────────────
+    # ── Core Primitives
     TRIGGER_MANUAL = "trigger_manual"
     TRIGGER_WEBHOOK = "trigger_webhook"
+    PROMPT = "prompt"
+    TOOL = "tool"
+    ROUTER = "router"
+    HUMAN_APPROVAL = "human_approval"
+    CODE = "code"
+    SYNTHESIZER = "synthesizer"
+
+    # ── Specialized / Control
     TRIGGER_CRON = "trigger_cron"
     SUPERVISOR = "supervisor"
-    ROUTER = "router"
     LOOP = "loop"
-    HUMAN_APPROVAL = "human_approval"
 
-    # ── Information ───────────────────────────────────────────────────────────
+    # ── Information 
     RESEARCH = "research"
     SCRAPER = "scraper"
     RAG = "rag"
     SQL = "sql"
+    DOCUMENT_PARSER = "document_parser"
+    VECTOR_SEARCH = "vector_search"
+    VISION = "vision"
 
-    # ── Processing / creation ─────────────────────────────────────────────────
+    # ── Processing / creation 
     SUMMARIZER = "summarizer"
     WRITER = "writer"
     TRANSFORMER = "transformer"
-    CODE = "code"
     TRANSLATOR = "translator"
+    DATA_ANALYST = "data_analyst"
+    AUDIO_TRANSCRIBER = "audio_transcriber"
 
-    # ── Quality / safety ──────────────────────────────────────────────────────
+    # ── Quality / safety ─
     REVIEWER = "reviewer"
     VALIDATOR = "validator"
     ERROR_HANDLER = "error_handler"
+    GUARDRAIL = "guardrail"
 
-    # ── Action ────────────────────────────────────────────────────────────────
+    # ── Action
     EMAIL = "email"
     HTTP_API = "http_api"
     SPREADSHEET = "spreadsheet"
@@ -62,9 +72,18 @@ class AgentType(str, Enum):
     CALENDAR = "calendar"
     FILE = "file"
     CRM = "crm"
+    WEBHOOK_DISPATCHER = "webhook_dispatcher"
+    GITHUB_OPS = "github_ops"
 
-    # ── Memory ────────────────────────────────────────────────────────────────
+    # ── Memory
     MEMORY = "memory"
+
+    # ── Protocols & Integrations
+    MCP_CLIENT = "mcp_client"
+    MCP_SERVER = "mcp_server"
+
+    # ── Advanced Autonomous / Web
+    BROWSER_OPERATOR = "browser_operator"
 
 
 class RunStatus(str, Enum):
@@ -82,14 +101,15 @@ class NodeRunStatus(str, Enum):
     COMPLETED = "completed"
     FAILED = "failed"
     SKIPPED = "skipped"
+    TIMED_OUT = "timed_out"
     AWAITING_APPROVAL = "awaiting_approval"
     APPROVED = "approved"
     REJECTED = "rejected"
 
 
-# ─────────────────────────────────────────────────────────────────────────────
+# 
 # Sub-schemas
-# ─────────────────────────────────────────────────────────────────────────────
+# 
 
 
 class RetryPolicy(BaseModel):
@@ -107,6 +127,18 @@ class Position(BaseModel):
     y: float = 0.0
 
 
+class JoinPolicy(str, Enum):
+    WAIT_ALL = "wait_all"  # Wait for all live (non-skipped) incoming edges (default)
+    WAIT_ANY = "wait_any"  # Execute as soon as any incoming edge completes
+
+
+class AutonomyLevel(str, Enum):
+    """Autonomy level for agent nodes and workflow execution governance."""
+    SUGGEST = "suggest"      # Read-only / Propose actions without executing destructive tools
+    ASK_FIRST = "ask_first"  # Destructive actions require human sign-off via HITL
+    ACT = "act"              # Fully autonomous execution of tools
+
+
 class NodeConfig(BaseModel):
     """Per-node configuration: model, prompt, tools, schemas, limits."""
     model: str = "moonshot/moonshot-v1-32k"
@@ -118,6 +150,12 @@ class NodeConfig(BaseModel):
     retry_policy: RetryPolicy = Field(default_factory=RetryPolicy)
     timeout_seconds: int = Field(default=60, ge=1)
     max_cost_usd: float | None = None
+    max_loop_iterations: int = Field(default=3, ge=1, le=20, description="Max feedback loop iterations")
+    join_policy: JoinPolicy = Field(default=JoinPolicy.WAIT_ALL, description="Fan-in join policy: wait_all or wait_any")
+    fallback_models: list[str] = Field(default_factory=list, description="Fallback models for self-healing execution")
+    autonomy: AutonomyLevel = Field(default=AutonomyLevel.ASK_FIRST, description="Autonomy level: suggest | ask_first | act")
+    max_tool_rounds: int = Field(default=10, ge=1, le=50, description="Max tool iterations in agent loop")
+    tool_timeout_seconds: float = Field(default=30.0, ge=1.0, le=300.0, description="Per-tool call timeout in seconds")
     # Extra agent-specific config (merged into agent's own config schema)
     extra: dict[str, Any] = Field(default_factory=dict)
 
@@ -144,17 +182,29 @@ class EdgeDef(BaseModel):
     # Maps target input fields from source output
     # e.g. {"topic": "{{research.output.summary}}"}
     data_map: dict[str, str] = Field(default_factory=dict)
+    # Phase 3: Advanced Control Flow
+    is_feedback: bool = Field(default=False, description="True if feedback loop / cycle edge")
+    is_default: bool = Field(default=False, description="True if default branch when other conditions are false")
+    is_error_handler: bool = Field(default=False, description="True if edge routes node execution errors")
+    max_iterations: int | None = Field(default=None, description="Max loop iterations override")
+    label: str = Field(default="", description="Visual label on canvas")
 
 
 class WorkflowDef(BaseModel):
     """Complete workflow definition stored as JSON in the database."""
     id: UUID = Field(default_factory=uuid4)
     name: str = "Untitled Workflow"
+    description: str = ""
     version: int = 1
+    tags: list[str] = Field(default_factory=list)
+    status: str = Field(default="draft", description="draft, active, or failed")
+    environment: str = Field(default="development", description="development or production")
     nodes: list[NodeDef] = Field(default_factory=list)
     edges: list[EdgeDef] = Field(default_factory=list)
     global_max_cost_usd: float | None = None
     global_max_steps: int = Field(default=100, ge=1)
+    global_max_time_seconds: float | None = Field(default=None, ge=1.0, description="Run-level timeout in seconds")
+    autonomy: AutonomyLevel | None = Field(default=None, description="Workflow-wide default autonomy level override")
 
     def get_node(self, node_id: str) -> NodeDef | None:
         return next((n for n in self.nodes if n.id == node_id), None)
@@ -166,9 +216,9 @@ class WorkflowDef(BaseModel):
         return [e.source for e in self.edges if e.target == node_id]
 
 
-# ─────────────────────────────────────────────────────────────────────────────
+# 
 # Message envelope — all inter-agent communication uses this shape
-# ─────────────────────────────────────────────────────────────────────────────
+# 
 
 
 class MessageMetadata(BaseModel):
@@ -194,12 +244,13 @@ class AgentMessage(BaseModel):
     run_id: UUID
     node_id: str
     status: NodeRunStatus
+    input_data: dict[str, Any] = Field(default_factory=dict)
     data: dict[str, Any] = Field(default_factory=dict)
     metadata: MessageMetadata = Field(default_factory=MessageMetadata)
     errors: list[str] = Field(default_factory=list)
 
 
-# ─────────────────────────────────────────────────────────────────────────────
+# 
 # Run-level records (used by both the in-memory executor and DB models)
 # ─────────────────────────────────────────────────────────────────────────────
 
@@ -210,6 +261,7 @@ class NodeRunRecord(BaseModel):
     node_id: str
     agent_type: AgentType
     attempt: int = 1
+    iteration: int = Field(default=1, ge=1, description="Iteration number in loop/feedback execution")
     status: NodeRunStatus = NodeRunStatus.PENDING
     input: dict[str, Any] = Field(default_factory=dict)
     output: dict[str, Any] | None = None

@@ -15,7 +15,6 @@ from __future__ import annotations
 
 import time
 from typing import Any
-from uuid import UUID
 
 import structlog
 
@@ -39,6 +38,10 @@ class StepLimitExceeded(Exception):
     """Raised when a run exceeds its max step count."""
 
 
+class TimeLimitExceeded(Exception):
+    """Raised when a run exceeds its total run-level time budget."""
+
+
 class RunContext:
     """
     Mutable run-level state passed to every node executor.
@@ -52,11 +55,19 @@ class RunContext:
         self.run = run
         self.workflow = workflow
         self._node_outputs: dict[str, dict[str, Any]] = {}
+        self._node_inputs: dict[str, dict[str, Any]] = {}
         self._step_count: int = 0
         self._loop_counts: dict[str, int] = {}  # edge_id -> iteration count
         self.current_node_id: str = ""  # set by node_runner before calling agent.run()
 
-    # ── Node output registry ─────────────────────────────────────────────────
+    # ── Node input & output registry ─────────────────────────────────────────
+
+    def record_node_input(self, node_id: str, data: dict[str, Any]) -> None:
+        """Store a node's resolved input data."""
+        self._node_inputs[node_id] = data
+
+    def get_node_input(self, node_id: str) -> dict[str, Any] | None:
+        return self._node_inputs.get(node_id)
 
     def record_node_output(self, node_id: str, data: dict[str, Any]) -> None:
         """Store a node's validated output so downstream nodes can reference it."""
@@ -67,6 +78,39 @@ class RunContext:
 
     def get_all_outputs(self) -> dict[str, dict[str, Any]]:
         return dict(self._node_outputs)
+
+    def resolve_node_id(self, ref: str) -> str | None:
+        """Resolve a node reference (node_id or slugified label) to an exact node_id."""
+        if ref in self._node_outputs or ref in self._node_inputs:
+            return ref
+        for node in self.workflow.nodes:
+            if node.id == ref:
+                return node.id
+            slug = (node.label or "").lower().strip().replace(" ", "_").replace("-", "_")
+            if slug and slug == ref:
+                return node.id
+            # Also match clean alphanumeric
+            clean_label = "".join(c for c in (node.label or "").lower() if c.isalnum() or c == "_")
+            if clean_label and clean_label == ref:
+                return node.id
+        return None
+
+    def get_node_snapshot(self, ref: str) -> dict[str, Any] | None:
+        """Return unified execution snapshot for a node by ID or slug."""
+        node_id = self.resolve_node_id(ref) or ref
+        inp = self.get_node_input(node_id) or {}
+        out = self.get_node_output(node_id) or {}
+        nr = next((r for r in reversed(self.run.node_runs) if r.node_id == node_id), None)
+        return {
+            "node_id": node_id,
+            "input": inp,
+            "output": out,
+            "status": nr.status.value if nr else ("completed" if out else "idle"),
+            "duration": nr.duration_ms if nr else 0,
+            "tokens": (nr.prompt_tokens + nr.completion_tokens) if nr else 0,
+            "cost_usd": nr.cost_usd if nr else 0.0,
+            "error": nr.error if nr else None,
+        }
 
     # ── Shared context ────────────────────────────────────────────────────────
 
@@ -101,6 +145,22 @@ class RunContext:
                 f"Run cost ${self.run.total_cost_usd:.4f} exceeded "
                 f"budget ${limit:.4f}"
             )
+
+    def check_time_limit(self) -> None:
+        """Enforce run-level total time limit (global_max_time_seconds)."""
+        limit = getattr(self.workflow, "global_max_time_seconds", None)
+        if limit is not None and self.run.started_at:
+            elapsed = time.time() - self.run.started_at
+            if elapsed > limit:
+                raise TimeLimitExceeded(
+                    f"Run elapsed time {elapsed:.2f}s exceeded global time budget {limit:.2f}s"
+                )
+
+    def check_budget_limits(self) -> None:
+        """Governor: check all run-level budget caps (cost, steps, total time)."""
+        self.check_cost_limit()
+        self.check_time_limit()
+
 
     # ── Loop tracking ─────────────────────────────────────────────────────────
 
@@ -151,6 +211,18 @@ class RunContext:
                 duration_ms=node_run.duration_ms,
                 tokens=message.metadata.total_tokens,
                 cost_usd=message.metadata.cost_usd,
+            )
+        elif message.status == NodeRunStatus.AWAITING_APPROVAL:
+            log.info(
+                "node_awaiting_approval",
+                run_id=str(self.run.id),
+                node_id=node_run.node_id,
+            )
+        elif message.status == NodeRunStatus.SKIPPED:
+            log.info(
+                "node_skipped",
+                run_id=str(self.run.id),
+                node_id=node_run.node_id,
             )
         else:
             node_run.error = "; ".join(message.errors)
