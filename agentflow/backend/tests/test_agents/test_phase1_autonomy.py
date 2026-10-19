@@ -30,6 +30,7 @@ from agentflow.core.schemas.workflow import (
     EdgeDef,
     NodeConfig,
     NodeDef,
+    NodeRunStatus,
     RunRecord,
     RunStatus,
     WorkflowDef,
@@ -381,3 +382,81 @@ def test_budget_governor_time_limit():
         ctx.check_budget_limits()
 
     assert "exceeded global time budget 1.00s" in str(exc_info.value)
+
+
+@pytest.mark.asyncio
+async def test_real_llm_failure_propagates_without_silent_mock():
+    """Bad API key or provider failure raises real exception instead of returning fake smart mock."""
+    from agentflow.config import settings
+    from agentflow.core.llm.client import complete
+    from agentflow.core.executor.node_runner import run_node, NodeExecutionError
+
+    # Ensure simulation mode is strictly OFF
+    settings.mock_llm = False
+    settings.simulation_mode = False
+
+    # Mock litellm to simulate real provider 401 AuthenticationError
+    with patch("litellm.acompletion") as mock_acompletion:
+        mock_acompletion.side_effect = Exception("AuthenticationError: 401 Invalid API Key provided")
+
+        # 1. Direct LLM completion must raise, NOT return _generate_smart_mock_response
+        with pytest.raises(Exception) as exc_info:
+            await complete(
+                messages=[{"role": "user", "content": "Analyze lead"}],
+                model="openrouter/anthropic/claude-3.5-sonnet",
+                api_key="sk-bad-key-9999",
+            )
+        assert "401 Invalid API Key" in str(exc_info.value)
+
+        # 2. Node runner must fail with NodeExecutionError and status FAILED
+        workflow_id = uuid4()
+        workflow_def = WorkflowDef(
+            id=workflow_id,
+            name="Auth Failure Workflow",
+            nodes=[
+                NodeDef(
+                    id="research_node",
+                    type=AgentType.RESEARCH,
+                    label="Research",
+                    config=NodeConfig(
+                        model="openrouter/anthropic/claude-3.5-sonnet",
+                        retry_policy={"max_attempts": 1, "backoff_seconds": 0.01},
+                    ),
+                )
+            ],
+            edges=[],
+        )
+        run = RunRecord(workflow_id=workflow_id, workflow_version=1)
+        ctx = RunContext(run=run, workflow=workflow_def)
+
+        with pytest.raises(NodeExecutionError) as node_exc:
+            await run_node(
+                node=workflow_def.nodes[0],
+                input_data={"lead_name": "Test Target"},
+                context=ctx,
+            )
+
+        assert "401 Invalid API Key" in str(node_exc.value)
+        # Verify node_run was marked FAILED, not COMPLETED
+        assert len(ctx.run.node_runs) == 1
+        assert ctx.run.node_runs[0].status == NodeRunStatus.FAILED
+        assert "401 Invalid API Key" in (ctx.run.node_runs[0].error or "")
+
+
+@pytest.mark.asyncio
+async def test_simulation_mode_explicit_opt_in():
+    """AGENTFLOW_SIMULATION_MODE=true visibly flags mock output with [SIMULATED RESULT]."""
+    from agentflow.config import settings
+    from agentflow.core.llm.client import complete
+
+    settings.mock_llm = False
+    settings.simulation_mode = True
+
+    try:
+        resp = await complete(
+            messages=[{"role": "user", "content": "Draft outreach email"}],
+            model="openrouter/free",
+        )
+        assert "[SIMULATED RESULT]" in resp.content
+    finally:
+        settings.simulation_mode = False

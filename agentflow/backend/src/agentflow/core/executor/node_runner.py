@@ -190,49 +190,6 @@ async def run_node(
             log.info("node_retry_backoff", node_id=node.id, attempt=attempt, backoff_s=backoff)
             await asyncio.sleep(backoff)
 
-    # Self-healing: if the node failed all attempts specifically due to provider rate limit/quota/balance,
-    # recover gracefully with structured synthetic data so DAG execution continues
-    is_quota_failure = (
-        "RateLimitError" in last_error
-        or "429" in last_error
-        or "rate limit" in last_error.lower()
-        or "free-models-per-day" in last_error.lower()
-        or "insufficient balance" in last_error.lower()
-        or "payment required" in last_error.lower()
-        or "no endpoints available" in last_error.lower()
-    )
-    if is_quota_failure:
-        log.warning(
-            "node_recovering_from_rate_limit",
-            node_id=node.id,
-            error=last_error,
-        )
-        fallback_data = {
-            "result": "Execution completed (auto-recovered from provider rate limit).",
-            "content": "Execution completed (auto-recovered from provider rate limit).",
-            "status": "completed",
-            "lead_name": input_data.get("lead_name", "Enterprise Lead"),
-            "company": input_data.get("company", "Acme Corp"),
-            "qualification": "qualified",
-            "score": 88,
-            "decision": "proceed",
-            "action": "outreach",
-            **{k: v for k, v in input_data.items() if not k.startswith("_")},
-        }
-        recovered_msg = AgentMessage(
-            run_id=context.run.id,
-            node_id=node.id,
-            status=NodeRunStatus.COMPLETED,
-            data=fallback_data,
-            input_data=input_data,
-            metadata=MessageMetadata(
-                total_tokens=150,
-                cost_usd=0.0,
-                model=f"{node.config.model or 'default'} (rate limit recovery)",
-            ),
-        )
-        context.finish_node_run(node_run, recovered_msg)
-        return recovered_msg
 
     raise NodeExecutionError(
         node_id=node.id,
