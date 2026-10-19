@@ -3,14 +3,16 @@ from __future__ import annotations
 
 import pytest
 
+from agentflow.core.executor.context import RunContext
 from agentflow.core.executor.mapping import (
     evaluate_condition,
     resolve_data_map,
     resolve_value,
 )
-from agentflow.core.executor.context import RunContext
-from agentflow.core.schemas.workflow import RunRecord, WorkflowDef, AgentType, NodeDef, NodeConfig, EdgeDef
-from uuid import uuid4
+from agentflow.core.schemas.workflow import (
+    RunRecord,
+    WorkflowDef,
+)
 
 
 @pytest.fixture
@@ -95,3 +97,22 @@ class TestEvaluateCondition:
 
     def test_empty_output(self) -> None:
         assert evaluate_condition("output.get('score', 0) >= 7", {}) is False
+
+    def test_dunder_attribute_traversal_exploit_is_rejected(self) -> None:
+        """Verify ().__class__.__base__.__subclasses__() and all dunder exploits are rejected and never executed."""
+        assert evaluate_condition("().__class__.__base__.__subclasses__()", {}) is False
+        assert evaluate_condition("output.__class__.__base__.__subclasses__()", {"score": 8}) is False
+        assert evaluate_condition("().__class__.__mro__[1].__subclasses__()", {}) is False
+        assert evaluate_condition("output.__globals__", {"score": 8}) is False
+
+    def test_arbitrary_code_execution_is_rejected(self) -> None:
+        """Arbitrary system imports and functions are rejected."""
+        assert evaluate_condition("__import__('os').system('id')", {}) is False
+        assert evaluate_condition("open('/etc/passwd').read()", {}) is False
+        assert evaluate_condition("eval('1+1')", {}) is False
+
+    def test_template_syntax_in_condition(self) -> None:
+        """Template interpolation syntax like {{output.score}} >= 7 is safely supported."""
+        assert evaluate_condition("{{output.score}} >= 7", {"score": 8}) is True
+        assert evaluate_condition("{{output.score}} >= 7", {"score": 4}) is False
+        assert evaluate_condition("{{score}} == 8 and {{details.tier}} == 'gold'", {"score": 8, "details": {"tier": "gold"}}) is True
