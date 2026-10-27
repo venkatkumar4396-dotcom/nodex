@@ -131,6 +131,26 @@ def build_demo_workflow() -> WorkflowDef:
         ),
     )
 
+    email = NodeDef(
+        id="email",
+        type=AgentType.EMAIL,
+        label="Email Dispatcher",
+        position=Position(x=300, y=850),
+        config=NodeConfig(
+            model="moonshot/moonshot-v1-32k",
+            system_prompt=(
+                "You are an automated email dispatch agent. "
+                "Format and dispatch the approved outreach email."
+            ),
+            tools=["email_send"],
+            retry_policy=RetryPolicy(max_attempts=2, backoff_seconds=1.0),
+            timeout_seconds=45,
+            extra={
+                "dry_run": True,
+            },
+        ),
+    )
+
     # ── Edge definitions ──────────────────────────────────────────────────────
 
     # Trigger → Research: pass all trigger data through
@@ -150,13 +170,12 @@ def build_demo_workflow() -> WorkflowDef:
     )
 
     # Classifier → Writer: only if score >= 7
-    # Phase 3 note: in a real conditional workflow, we'd add a "not qualified"
-    # branch too. Phase 1 demo just lets the run skip the writer if score < 7.
     edge_classifier_to_writer = EdgeDef(
         id="e_classifier_writer",
         source="classifier",
         target="writer",
         condition="output.get('score', 0) >= 7",
+        label="Qualified (Score >= 7)",
         # Map specific fields from classifier output to writer input
         data_map={
             "summary": "{{research.output.summary}}",
@@ -174,6 +193,7 @@ def build_demo_workflow() -> WorkflowDef:
         id="e_writer_reviewer",
         source="writer",
         target="reviewer",
+        label="Submit Draft",
         data_map={
             "subject": "{{writer.output.subject}}",
             "body": "{{writer.output.body}}",
@@ -184,16 +204,47 @@ def build_demo_workflow() -> WorkflowDef:
         },
     )
 
+    # Reviewer → Writer (Feedback Loop): request revisions if score < threshold
+    edge_reviewer_to_writer = EdgeDef(
+        id="e_reviewer_writer_feedback",
+        source="reviewer",
+        target="writer",
+        is_feedback=True,
+        condition="not output.passed",
+        max_iterations=3,
+        label="Revise (Score < 8)",
+        data_map={
+            "feedback": "{{reviewer.output.feedback}}",
+            "revised_subject": "{{reviewer.output.revised_subject}}",
+        },
+    )
+
+    # Reviewer → Email: dispatch once approved
+    edge_reviewer_to_email = EdgeDef(
+        id="e_reviewer_email",
+        source="reviewer",
+        target="email",
+        condition="output.passed",
+        label="Approved -> Send",
+        data_map={
+            "to_email": "prospect@example.com",
+            "subject": "{{writer.output.subject}}",
+            "body": "{{writer.output.body}}",
+        },
+    )
+
     return WorkflowDef(
         id=uuid4(),
         name="Lead Research & Qualified Outreach",
-        version=1,
-        nodes=[trigger, research, classifier, writer, reviewer],
+        version=2,
+        nodes=[trigger, research, classifier, writer, reviewer, email],
         edges=[
             edge_trigger_to_research,
             edge_research_to_classifier,
             edge_classifier_to_writer,
             edge_writer_to_reviewer,
+            edge_reviewer_to_writer,
+            edge_reviewer_to_email,
         ],
         global_max_cost_usd=2.0,
         global_max_steps=20,

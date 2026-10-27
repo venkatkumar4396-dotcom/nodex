@@ -17,13 +17,13 @@ Output schema:
 """
 from __future__ import annotations
 
-from typing import Any, ClassVar, TYPE_CHECKING
-from pydantic import BaseModel, Field
+from typing import TYPE_CHECKING, Any, ClassVar
 
 import structlog
+from pydantic import BaseModel, Field
 
 from agentflow.core.agents.base import BaseAgent
-from agentflow.core.llm.structured import complete_structured, StructuredOutputError
+from agentflow.core.llm.structured import complete_structured
 from agentflow.core.schemas.workflow import (
     AgentMessage,
     AgentType,
@@ -67,23 +67,49 @@ class ClassifierAgent(BaseAgent):
         self,
         input_data: dict[str, Any],
         config: NodeConfig,
-        context: "RunContext",
-        tools: list["BaseTool"],
+        context: RunContext,
+        tools: list[BaseTool],
     ) -> AgentMessage:
+        trigger = context.run.trigger_data or {}
+        lead_name = input_data.get("lead_name") or trigger.get("lead_name", "")
+        company = input_data.get("company") or trigger.get("company", "")
+        goal = input_data.get("goal") or trigger.get("goal", "")
         summary = input_data.get("summary", "")
         key_findings = input_data.get("key_findings", [])
         confidence = input_data.get("confidence", 0.5)
-        lead_name = input_data.get("lead_name", "")
-        company = input_data.get("company", "")
-        goal = input_data.get("goal", "")
         validation_feedback = input_data.get("_validation_feedback")
+
+        # Fallback to snapshots or context outputs if research summary is missing
+        if not summary:
+            snap = input_data.get("data_snapshot")
+            if isinstance(snap, dict) and snap.get("summary"):
+                summary = snap.get("summary", "")
+                key_findings = snap.get("key_findings", [])
+                confidence = snap.get("confidence", confidence)
+            else:
+                for out in context.get_all_outputs().values():
+                    if isinstance(out, dict) and out.get("summary"):
+                        summary = out.get("summary", "")
+                        if not key_findings and out.get("key_findings"):
+                            key_findings = out.get("key_findings", [])
+                        if out.get("confidence"):
+                            confidence = out.get("confidence", confidence)
+                        break
+
+        # Check if outreach has already been approved by a human or upstream gate
+        is_human_approved = (
+            input_data.get("approved") is True
+            or (isinstance(input_data.get("data_snapshot"), dict) and input_data["data_snapshot"].get("approved") is True)
+        )
 
         system_prompt = config.system_prompt or (
             "You are a sales qualification specialist. "
             "You score leads and companies based on research data. "
             "Be honest and critical — not every lead deserves a high score. "
             "Use the ICP (ideal customer profile) framework. "
-            "A score of 7+ means 'qualified for outreach'."
+            "A score of 7+ means 'qualified for outreach'. "
+            "If a lead or outreach draft has already been explicitly approved by a human operator, "
+            "respect that approval and score the lead as qualified unless clear disqualifiers exist."
         )
 
         findings_text = "\n".join(
@@ -91,7 +117,13 @@ class ClassifierAgent(BaseAgent):
             for f in key_findings
         ) if key_findings else "No findings provided."
 
-        user_content = f"""Score this lead for B2B sales qualification:
+        approval_notice = (
+            "\nNote: This lead and outreach email have been explicitly reviewed and APPROVED by a human operator.\n"
+            if is_human_approved
+            else ""
+        )
+
+        user_content = f"""Score this lead for B2B sales qualification:{approval_notice}
 
 Lead: {lead_name or "Unknown"}
 Company: {company or "Unknown"}
@@ -113,19 +145,26 @@ A score >= 7 means qualified. Set branch to 'qualified' or 'not_qualified' accor
             {"role": "user", "content": user_content},
         ]
 
-        try:
-            result, llm_resp = await complete_structured(
-                messages=messages,
-                output_model=ClassifierOutput,
-                model=config.model,
-                validation_feedback=validation_feedback,
-            )
-        except StructuredOutputError:
-            raise
+        result, llm_resp = await complete_structured(
+            messages=messages,
+            output_model=ClassifierOutput,
+            model=config.model,
+            validation_feedback=validation_feedback,
+        )
 
         output_data = result.model_dump()
-        output_data.setdefault("lead_name", lead_name)
-        output_data.setdefault("company", company)
+        if not output_data.get("lead_name") and lead_name:
+            output_data["lead_name"] = lead_name
+        if not output_data.get("company") and company:
+            output_data["company"] = company
+
+        # Preserve downstream content keys (subject, body, email, etc.)
+        for k in (
+            "subject", "body", "email_content", "to_email", "goal",
+            "summary", "topic", "approved", "notes", "reviewer",
+        ):
+            if k in input_data and k not in output_data:
+                output_data[k] = input_data[k]
 
         log.info(
             "classifier_completed",

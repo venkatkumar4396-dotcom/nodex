@@ -3,9 +3,9 @@
 > **Next-Generation Visual Agentic Workflow Platform**  
 > An n8n-style workflow engine where every node is an autonomous AI agent that reasons, calls tools, and passes typed structured data to downstream nodes.
 
-[![Tests](https://img.shields.io/badge/tests-51%2F51%20passing-brightgreen)](file:///tests)
-[![Python](https://img.shields.io/badge/python-3.10%2B-blue)](file:///pyproject.toml)
-[![Architecture](https://img.shields.io/badge/architecture-DAG%20%2B%20State%20Machine-purple)](file:///agentflow_architecture.md)
+[![Tests](https://img.shields.io/badge/tests-132%2F132%20passing-brightgreen)](file:///agentflow/backend/tests)
+[![Python](https://img.shields.io/badge/python-3.10%2B-blue)](file:///agentflow/backend/pyproject.toml)
+[![Frontend](https://img.shields.io/badge/frontend-React%2019%20%2B%20React%20Flow-blue)](file:///agentflow/frontend)
 [![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 
 ---
@@ -19,9 +19,13 @@ Traditional workflow engines (like Zapier or classic n8n) connect deterministic 
 - **Topological Graph Execution**: High-throughput DAG engine using Kahn's algorithm with concurrent async node execution.
 - **Provider-Agnostic LLM Routing**: Unified LiteLLM client supporting Moonshot AI (Kimi), OpenAI, Anthropic, Gemini, and local Ollama.
 - **Structured Output & Self-Correction**: Enforces Pydantic output schemas with self-correcting validation loops.
-- **Pluggable Agent Registry**: Clean separation between executor engine and agent implementations (`Research`, `Classifier`, `Writer`, `Reviewer`, `ManualTrigger`).
+- **Pluggable Agent Registry**: Clean separation between executor engine and agent implementations (`Research`, `Classifier`, `Writer`, `Reviewer`, `ManualTrigger`, `Email`, `HumanApproval`, `Supervisor`, `RAG`, `Memory`).
+- **Production Tooling**: Built-in Web Search (Serper/DDG), HTTP request client, and Email dispatcher with encrypted credential store.
+- **Advanced Control Flow**: Multi-path conditional branching, default fallback paths, self-healing Writer↔Reviewer feedback loops, and error handler edges.
 - **Templating & Data Flow**: Mustache-style dynamic expression resolution (`{{research.output.summary}}`) connecting node inputs to upstream outputs.
-- **Cost & Token Telemetry**: Real-time token tracking and cost auditing per node and across workflow runs.
+- **Visual React Flow Studio**: Interactive node canvas with magnetic IN/OUT port handles, live running indicators, node inspection, and auto-DAG formatting.
+- **Human-in-the-Loop Governance**: Real-time pause-on-approval gate with interactive sign-off banners and resume APIs.
+- **AI Workflow Synthesis & Telemetry**: Natural language prompt-to-DAG generation and enterprise telemetry KPI dashboard.
 
 ---
 
@@ -41,23 +45,27 @@ Traditional workflow engines (like Zapier or classic n8n) connect deterministic 
                     └───────────┬────────────┘
                                 │ score >= 7 (Conditional branch)
                     ┌───────────▼────────────┐
-                    │      Writer Agent      │
+                    │      Writer Agent      │◄──────────────────────────┐
+                    └───────────┬────────────┘                           │
+                                │ {subject, body, tone}                  │ not passed
+                    ┌───────────▼────────────┐                           │ (Feedback Loop)
+                    │     Reviewer Agent     ├───────────────────────────┘
                     └───────────┬────────────┘
-                                │ {subject, body, tone}
+                                │ passed == True (Forward edge)
                     ┌───────────▼────────────┐
-                    │     Reviewer Agent     │
+                    │     Email Dispatch     │
                     └────────────────────────┘
 ```
 
 | Phase | Description | Status |
 |:---|:---|:---:|
-| **Phase 1** | Workflow JSON Schema + Topological DAG Executor + Agent Registry + 5 Core Agents + Tests | **Complete (51/51 Tests Passing)** |
-| **Phase 2** | Production Tools (Web Search, HTTP, Email) + Guardrails + Structured Retries | Upcoming |
-| **Phase 3** | Advanced Control Flow (Branching, Loops, Parallel Fan-Out, Writer↔Reviewer Feedback) | Upcoming |
-| **Phase 4** | Backend Services (FastAPI + PostgreSQL + Redis/Arq Task Queue + SSE / WebSockets) | Upcoming |
-| **Phase 5** | Frontend Canvas (React 19 + Vite + React Flow + Tailwind CSS) | Upcoming |
-| **Phase 6** | Specialized Agents (Human-in-the-Loop Approval, Supervisor, RAG, Memory) | Upcoming |
-| **Phase 7** | Natural Language Workflow Builder, Marketplace Templates & Enterprise Governance | Upcoming |
+| **Phase 1** | Workflow JSON Schema + Topological DAG Executor + Agent Registry + 5 Core Agents + Tests | **Complete** |
+| **Phase 2** | Production Tools (Web Search, HTTP, Email) + Guardrails + Structured Retries + Credential Store | **Complete** |
+| **Phase 3** | Advanced Control Flow (Branching, Loops, Parallel Fan-Out, Writer↔Reviewer Feedback Loop, Error Recovery) | **Complete** |
+| **Phase 4** | Backend Services (FastAPI + SQLite Persistence + Real-Time SSE Stream + Run Telemetry) | **Complete** |
+| **Phase 5** | Frontend Canvas (React 19 + Vite + React Flow + IN/OUT Handles + Live Run Visualizer) | **Complete** |
+| **Phase 6** | Specialized Agents (Human-in-the-Loop Approval, Supervisor, RAG, Memory, Canvas Review Banner) | **Complete** |
+| **Phase 7** | Natural Language Workflow Builder, Marketplace Templates & Enterprise Governance Analytics | **Complete (132/132 Tests Passing)** |
 
 ---
 

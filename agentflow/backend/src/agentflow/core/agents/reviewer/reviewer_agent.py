@@ -16,13 +16,13 @@ Output schema:
 """
 from __future__ import annotations
 
-from typing import Any, ClassVar, TYPE_CHECKING
-from pydantic import BaseModel, Field
+from typing import TYPE_CHECKING, Any, ClassVar
 
 import structlog
+from pydantic import BaseModel, Field
 
 from agentflow.core.agents.base import BaseAgent
-from agentflow.core.llm.structured import complete_structured, StructuredOutputError
+from agentflow.core.llm.structured import complete_structured
 from agentflow.core.schemas.workflow import (
     AgentMessage,
     AgentType,
@@ -78,8 +78,8 @@ class ReviewerAgent(BaseAgent):
         self,
         input_data: dict[str, Any],
         config: NodeConfig,
-        context: "RunContext",
-        tools: list["BaseTool"],
+        context: RunContext,
+        tools: list[BaseTool],
     ) -> AgentMessage:
         subject = input_data.get("subject", "")
         body = input_data.get("body", "")
@@ -136,15 +136,12 @@ Provide specific, actionable feedback referencing actual lines from the email.
             {"role": "user", "content": user_content},
         ]
 
-        try:
-            result, llm_resp = await complete_structured(
-                messages=messages,
-                output_model=ReviewerOutput,
-                model=config.model,
-                validation_feedback=validation_feedback,
-            )
-        except StructuredOutputError:
-            raise
+        result, llm_resp = await complete_structured(
+            messages=messages,
+            output_model=ReviewerOutput,
+            model=config.model,
+            validation_feedback=validation_feedback,
+        )
 
         output_data = result.model_dump()
         # Pass through the original content for downstream nodes

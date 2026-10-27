@@ -117,7 +117,7 @@ async def complete_structured(
         raise StructuredOutputError(
             f"LLM did not return valid JSON. Raw output:\n{raw[:500]}",
             raw_output=raw,
-            validation_errors=[f"JSON parse error: could not decode response as JSON"],
+            validation_errors=["JSON parse error: could not decode response as JSON"],
         )
 
     # Validate with Pydantic
@@ -126,7 +126,7 @@ async def complete_structured(
     except ValidationError as e:
         errors = [f"{err['loc']}: {err['msg']}" for err in e.errors()]
         raise StructuredOutputError(
-            f"Output failed schema validation:\n" + "\n".join(errors),
+            "Output failed schema validation:\n" + "\n".join(errors),
             raw_output=raw,
             validation_errors=errors,
         ) from e

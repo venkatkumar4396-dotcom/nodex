@@ -1,4 +1,5 @@
 """Schemas package."""
+from agentflow.core.schemas.tool import ToolDef, ToolResult
 from agentflow.core.schemas.workflow import (
     AgentMessage,
     AgentType,
@@ -14,7 +15,6 @@ from agentflow.core.schemas.workflow import (
     RunStatus,
     WorkflowDef,
 )
-from agentflow.core.schemas.tool import ToolDef, ToolResult
 
 __all__ = [
     "AgentMessage",

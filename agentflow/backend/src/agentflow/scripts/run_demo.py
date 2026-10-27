@@ -19,6 +19,7 @@ import argparse
 import asyncio
 import json
 import sys
+from uuid import uuid4
 
 # Ensure UTF-8 output on Windows consoles to prevent cp1252 charmap encoding errors
 if sys.platform == "win32":
@@ -27,18 +28,18 @@ if sys.platform == "win32":
             sys.stdout.reconfigure(encoding="utf-8", errors="replace")
         if hasattr(sys.stderr, "reconfigure"):
             sys.stderr.reconfigure(encoding="utf-8", errors="replace")
-    except Exception:
+    except Exception:  # noqa: S110 — OS-level console reconfiguration, no useful exception type
         pass
 
 # Configure logging before any imports that use structlog
-import agentflow.logging_config  # noqa: F401  (side effect: configures structlog)
-
 import structlog
 
+import agentflow.logging_config  # noqa: F401  (side effect: configures structlog)
 from agentflow.config import settings
 from agentflow.core.agents.registry import register_all_builtin_agents
 from agentflow.core.executor.runner import run_workflow
 from agentflow.core.schemas.workflow import NodeRunStatus, RunStatus
+from agentflow.core.tools.registry import register_all_builtin_tools
 from agentflow.core.workflows.demo_workflow import build_demo_workflow
 
 log = structlog.get_logger(__name__)
@@ -55,14 +56,15 @@ async def main(
     """Execute the demo workflow and print results."""
 
     print("\n" + "=" * 70)
-    print("  [*] AgentFlow - Phase 1 Demo")
-    print("  Lead Research & Qualified Outreach Pipeline")
+    print("  [*] AgentFlow - Phase 3 Demo")
+    print("  Lead Research, Qualified Outreach & Self-Healing Feedback Loop")
     if mock:
         print("  [MOCK MODE ACTIVE - Offline DAG Simulation]")
     print("=" * 70 + "\n")
 
-    # Register all built-in agents
+    # Register all built-in agents and tools
     register_all_builtin_agents()
+    register_all_builtin_tools()
 
     if mock:
         _register_mock_agents(lead_name, company)
@@ -92,7 +94,7 @@ async def main(
         "goal": goal,
     }
 
-    print(f"[*] Starting run...")
+    print("[*] Starting run...")
     print(f"   Lead: {lead_name}")
     print(f"   Company: {company}")
     print(f"   Goal: {goal}")
@@ -128,7 +130,8 @@ async def main(
             NodeRunStatus.PENDING: "[PEND]",
         }.get(nr.status, "[?]")
 
-        print(f"\n{status_sym} {nr.node_id} ({nr.agent_type.value}) - attempt {nr.attempt}")
+        iter_str = f" [iteration {nr.iteration}]" if getattr(nr, "iteration", 1) > 1 else ""
+        print(f"\n{status_sym} {nr.node_id} ({nr.agent_type.value}) - attempt {nr.attempt}{iter_str}")
         print(f"   Status:   {nr.status.value}")
         print(f"   Duration: {nr.duration_ms}ms")
         print(f"   Tokens:   {nr.prompt_tokens + nr.completion_tokens}")
@@ -140,7 +143,7 @@ async def main(
             print(f"   Validation: {nr.validation_errors}")
 
         if nr.output:
-            print(f"   Output:")
+            print("   Output:")
             _print_output(nr.node_id, nr.output)
 
     print(f"\n{'=' * 70}\n")
@@ -177,9 +180,16 @@ def _print_output(node_id: str, output: dict) -> None:
         print(f"     Feedback: {output.get('feedback', '')[:200]}")
         improvements = output.get("improvements", [])
         if improvements:
-            print(f"     Improvements:")
+            print("     Improvements:")
             for imp in improvements[:3]:
                 print(f"       - {imp}")
+
+    elif node_id == "email":
+        print(f"     Sent:     {output.get('sent', False)}")
+        print(f"     To:       {output.get('to_email', 'unknown')}")
+        print(f"     Backend:  {output.get('backend', 'stub')}")
+        print(f"     Subject:  {output.get('subject', '')}")
+        print(f"     Message ID: {output.get('message_id', 'n/a')}")
 
     else:
         # Generic: just print the dict compactly
@@ -302,16 +312,31 @@ def _register_mock_agents(lead_name: str, company: str) -> None:
                 ),
             )
 
+    reviewer_round = 0
+
     class MockReviewerAgent(BaseAgent):
         type_key = AgentType.REVIEWER
 
         async def run(self, input_data, config, context, tools):
-            data = {
-                "score": 9.4,
-                "passed": True,
-                "feedback": "Outstanding cold email. Highly personalized, addresses specific pain points, clear value proposition, and low-friction call to action.",
-                "improvements": ["Consider adding a one-line customer case study metric."],
-            }
+            nonlocal reviewer_round
+            reviewer_round += 1
+            if reviewer_round == 1:
+                # Iteration 1: Needs revision
+                data = {
+                    "score": 6,
+                    "passed": False,
+                    "feedback": "Draft is good, but please reference their enterprise cloud scaling explicitly and tighten the CTA.",
+                    "improvements": ["Reference enterprise cloud scaling.", "Low-friction 10-minute call CTA."],
+                    "revised_subject": f"Modernizing Enterprise Agentic Workflows at {company}",
+                }
+            else:
+                # Iteration 2: Passes review
+                data = {
+                    "score": 9.5,
+                    "passed": True,
+                    "feedback": "Outstanding revised cold email! Highly personalized with specific enterprise context and low-friction CTA.",
+                    "improvements": [],
+                }
             return AgentMessage(
                 run_id=context.run.id,
                 node_id="reviewer",
@@ -326,10 +351,37 @@ def _register_mock_agents(lead_name: str, company: str) -> None:
                 ),
             )
 
+    class MockEmailAgent(BaseAgent):
+        type_key = AgentType.EMAIL
+
+        async def run(self, input_data, config, context, tools):
+            data = {
+                "sent": True,
+                "to_email": input_data.get("to_email", f"{lead_name.lower().replace(' ', '.')}@{company.lower().replace(' ', '')}.com"),
+                "subject": input_data.get("subject", "Modernizing Agentic Workflows"),
+                "body_preview": str(input_data.get("body", ""))[:200],
+                "backend": "stub (dry_run)",
+                "message_id": f"msg_{uuid4().hex[:12]}",
+            }
+            return AgentMessage(
+                run_id=context.run.id,
+                node_id="email",
+                status=NodeRunStatus.COMPLETED,
+                data=data,
+                metadata=MessageMetadata(
+                    prompt_tokens=80,
+                    completion_tokens=30,
+                    total_tokens=110,
+                    cost_usd=0.0001,
+                    model="mock-model",
+                ),
+            )
+
     agent_registry.register(AgentType.RESEARCH, MockResearchAgent())
     agent_registry.register(AgentType.ROUTER, MockClassifierAgent())
     agent_registry.register(AgentType.WRITER, MockWriterAgent())
     agent_registry.register(AgentType.REVIEWER, MockReviewerAgent())
+    agent_registry.register(AgentType.EMAIL, MockEmailAgent())
 
 
 def parse_args() -> argparse.Namespace:

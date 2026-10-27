@@ -1,0 +1,349 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AgentFlow Architecture & Learning Diagrams</title>
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+  <style>
+    :root {
+      --bg: #0f172a;
+      --card-bg: #1e293b;
+      --border: #334155;
+      --text: #f8fafc;
+      --text-muted: #94a3b8;
+      --accent: #38bdf8;
+      --accent-hover: #0284c7;
+    }
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    }
+    body {
+      background-color: var(--bg);
+      color: var(--text);
+      padding: 24px;
+      line-height: 1.6;
+    }
+    header {
+      max-width: 1400px;
+      margin: 0 auto 24px;
+      padding-bottom: 20px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 16px;
+    }
+    h1 {
+      font-size: 1.8rem;
+      color: #fff;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .badge {
+      background: rgba(56, 189, 248, 0.15);
+      color: var(--accent);
+      padding: 4px 12px;
+      border-radius: 9999px;
+      font-size: 0.85rem;
+      border: 1px solid rgba(56, 189, 248, 0.3);
+    }
+    .tabs {
+      max-width: 1400px;
+      margin: 0 auto 24px;
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+    .tab-btn {
+      background: var(--card-bg);
+      color: var(--text-muted);
+      border: 1px solid var(--border);
+      padding: 10px 20px;
+      border-radius: 8px;
+      cursor: pointer;
+      font-weight: 500;
+      font-size: 0.95rem;
+      transition: all 0.2s ease;
+    }
+    .tab-btn:hover {
+      background: #2a374a;
+      color: #fff;
+    }
+    .tab-btn.active {
+      background: var(--accent);
+      color: #0f172a;
+      border-color: var(--accent);
+      font-weight: 600;
+    }
+    .container {
+      max-width: 1400px;
+      margin: 0 auto;
+    }
+    .diagram-card {
+      display: none;
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 24px;
+      box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.3);
+    }
+    .diagram-card.active {
+      display: block;
+    }
+    .diagram-title {
+      font-size: 1.3rem;
+      margin-bottom: 8px;
+      color: #fff;
+    }
+    .diagram-desc {
+      color: var(--text-muted);
+      margin-bottom: 24px;
+      font-size: 0.95rem;
+    }
+    .mermaid-wrapper {
+      background: #0b1120;
+      border-radius: 8px;
+      padding: 20px;
+      overflow-x: auto;
+      display: flex;
+      justify-content: center;
+      border: 1px solid rgba(255, 255, 255, 0.05);
+    }
+    .mermaid {
+      width: 100%;
+    }
+    .tips {
+      margin-top: 16px;
+      padding: 12px 16px;
+      background: rgba(56, 189, 248, 0.08);
+      border-left: 3px solid var(--accent);
+      border-radius: 4px;
+      font-size: 0.9rem;
+      color: #e2e8f0;
+    }
+  </style>
+</head>
+<body>
+
+  <header>
+    <div>
+      <h1>AgentFlow Architecture Visualizer</h1>
+      <p style="color: var(--text-muted); font-size: 0.9rem; margin-top: 4px;">
+        Interactive Architectural Diagrams & Learning Roadmap for Phases 1 to 3
+      </p>
+    </div>
+    <span class="badge">Phases 1-3 Verified (119 Tests)</span>
+  </header>
+
+  <div class="tabs">
+    <button class="tab-btn active" onclick="showTab('tab1', this)">1. File-by-File Learning Roadmap</button>
+    <button class="tab-btn" onclick="showTab('tab2', this)">2. Runtime Dynamic Control-Flow</button>
+    <button class="tab-btn" onclick="showTab('tab3', this)">3. Production 6-Node Pipeline</button>
+  </div>
+
+  <div class="container">
+    <!-- TAB 1 -->
+    <div id="tab1" class="diagram-card active">
+      <h2 class="diagram-title">1. File-by-File Learning & Dependency Graph (Files 1 to 24)</h2>
+      <p class="diagram-desc">
+        Follow this exact reading sequence. Each stage directly feeds into the next, from core data contracts to execution engine.
+      </p>
+      <div class="mermaid-wrapper">
+        <div class="mermaid">
+flowchart TD
+    classDef contract fill:#0284c7,stroke:#38bdf8,stroke-width:2px,color:#fff;
+    classDef llm fill:#7c3aed,stroke:#a78bfa,stroke-width:2px,color:#fff;
+    classDef tools fill:#059669,stroke:#34d399,stroke-width:2px,color:#fff;
+    classDef agents fill:#d97706,stroke:#fbbf24,stroke-width:2px,color:#fff;
+    classDef engine fill:#dc2626,stroke:#f87171,stroke-width:2px,color:#fff;
+    classDef workflow fill:#db2777,stroke:#f472b6,stroke-width:2px,color:#fff;
+
+    subgraph Step1["Step 1: Foundational Data Contracts"]
+        F1["1. config.py<br/>(Settings & Budgets)"]:::contract
+        F2["2. schemas/tool.py<br/>(ToolDef & ToolResult)"]:::contract
+        F3["3. schemas/workflow.py<br/>(NodeDef, EdgeDef, AgentMessage)"]:::contract
+        F1 --> F3
+        F2 --> F3
+    end
+
+    subgraph Step2["Step 2: LLM Gateway & Structured Parser"]
+        F4["4. llm/client.py<br/>(LiteLLM Provider Gateway)"]:::llm
+        F5["5. llm/structured.py<br/>(Pydantic JSON & Auto-Repair)"]:::llm
+        F1 --> F4
+        F4 --> F5
+        F3 --> F5
+    end
+
+    subgraph Step3["Step 3: Tools & Cryptographic Security Vault"]
+        F6["6. tools/base.py<br/>(BaseTool & OpenAI Schema)"]:::tools
+        F7["7. tools/credentials.py<br/>(Fernet AES Cryptographic Vault)"]:::tools
+        F8["8. tools/registry.py<br/>(ToolRegistry Singleton)"]:::tools
+        F9["9. tools/tool_loop.py<br/>(ReAct Reasoning & Injection Defense)"]:::tools
+        F10["10. Concrete Tools<br/>(web_search, http_tool, email_tool)"]:::tools
+        F2 --> F6
+        F1 --> F7
+        F6 --> F8
+        F7 --> F8
+        F6 --> F9
+        F4 --> F9
+        F8 --> F10
+    end
+
+    subgraph Step4["Step 4: The Autonomous Agents"]
+        F11["11. agents/base.py & registry.py<br/>(BaseAgent & AgentRegistry)"]:::agents
+        F12["12. trigger/manual.py<br/>(Workflow Seed Trigger)"]:::agents
+        F13["13. research/research_agent.py<br/>(Web Intelligence Gathering)"]:::agents
+        F14["14. classifier/classifier_agent.py<br/>(ICP Scoring & Branch Router)"]:::agents
+        F15["15. writer/writer_agent.py<br/>(Personalized Copy & Revision)"]:::agents
+        F16["16. reviewer/reviewer_agent.py<br/>(Editorial QA & Feedback)"]:::agents
+        F17["17. email/email_agent.py<br/>(Action Dispatch Agent)"]:::agents
+        F3 --> F11
+        F5 --> F11
+        F11 --> F12
+        F11 --> F13
+        F11 --> F14
+        F11 --> F15
+        F11 --> F16
+        F11 --> F17
+        F9 --> F13
+        F10 --> F17
+    end
+
+    subgraph Step5["Step 5: The Topological Execution Engine"]
+        F18["18. executor/context.py<br/>(RunContext, Budget & Step Guards)"]:::engine
+        F19["19. executor/graph.py<br/>(Kahn's Topological Layers & Cycle Check)"]:::engine
+        F20["20. executor/mapping.py<br/>(OutputWrapper & evaluate_condition)"]:::engine
+        F21["21. executor/node_runner.py<br/>(run_node, Retries & Timeouts)"]:::engine
+        F22["22. executor/runner.py<br/>(DPE, Feedback Loops & Join Policies)"]:::engine
+        F3 --> F18
+        F3 --> F19
+        F18 --> F20
+        F11 --> F21
+        F8 --> F21
+        F18 --> F21
+        F19 --> F22
+        F20 --> F22
+        F21 --> F22
+    end
+
+    subgraph Step6["Step 6: Production Pipeline Assembly & CLI"]
+        F23["23. workflows/demo_workflow.py<br/>(6-Node DAG Specification)"]:::workflow
+        F24["24. scripts/run_demo.py<br/>(CLI Execution Harness & Mock Mode)"]:::workflow
+        F3 --> F23
+        F22 --> F24
+        F23 --> F24
+    end
+        </div>
+      </div>
+      <div class="tips">
+        💡 <strong>Tip:</strong> Start by reading <code>schemas/workflow.py</code> first, then jump to <code>executor/runner.py</code> to see the heartbeat of the engine.
+      </div>
+    </div>
+
+    <!-- TAB 2 -->
+    <div id="tab2" class="diagram-card">
+      <h2 class="diagram-title">2. Runtime Dynamic Control-Flow Architecture</h2>
+      <p class="diagram-desc">
+        Visualizes the active execution loop: ready set frontier, concurrent batching, ReAct reasoning, edge evaluation, Dead-Path Elimination (DPE), and self-healing loops.
+      </p>
+      <div class="mermaid-wrapper">
+        <div class="mermaid">
+flowchart TD
+    subgraph UI_REST["Client & Persistence Layer (Phase 4 & 5)"]
+        Canvas["React Flow Canvas"] --> REST["FastAPI API"]
+        REST --> DB[(PostgreSQL)]
+        REST --> ArqQueue[(Redis / Arq Worker)]
+    end
+
+    subgraph CoreEngine["AgentFlow Engine Core (Phases 1 - 3)"]
+        WDef["WorkflowDef (Pydantic Spec)"] --> GraphBuilder["build_execution_graph()"]
+        GraphBuilder -->|"Forward DAG Layers"| Runner["WorkflowRunner (Dynamic Frontier)"]
+
+        subgraph DynamicExecutionLoop["Dynamic Step Execution"]
+            Runner -->|"1. Resolve Ready Nodes"| NodeRunner["run_node()"]
+            NodeRunner -->|"2. Resolve Agent"| Agent["BaseAgent Plugin"]
+            NodeRunner -->|"3. Resolve Tools & Inject Decrypted Keys"| ToolRegistry["ToolRegistry + CredentialStore"]
+            ToolRegistry -->|"4. Execute Tool Loop"| ToolLoop["ToolLoop (ReAct)"]
+            ToolLoop -->|"5. Model Call"| LiteLLM["LiteLLM Client"]
+            LiteLLM -->|"6. Structured Output Parse"| Parser["StructuredOutputParser"]
+        end
+
+        Parser -->|"7. Emit AgentMessage"| Context["RunContext"]
+        Context -->|"8. Edge Evaluation & DPE"| ControlFlow{"Control Flow Engine"}
+
+        ControlFlow -->|"Condition True"| SatisfiedEdge["satisfied_edges.add(edge.id)"]
+        ControlFlow -->|"Condition False"| DeadEdge["dead_edges.add(edge.id)"]
+        ControlFlow -->|"All False -> is_default"| DefaultEdge["satisfied_edges.add(default_edge.id)"]
+        ControlFlow -->|"is_feedback (Loop)"| CycleReset["_find_cycle_nodes() Reset"]
+        ControlFlow -->|"Node Failed -> is_error_handler"| ErrorPath["Route to Error Handler"]
+
+        SatisfiedEdge --> Runner
+        DeadEdge --> DPE["Cascade Dead Path Elimination"]
+        DPE --> Runner
+        CycleReset --> Runner
+    end
+        </div>
+      </div>
+    </div>
+
+    <!-- TAB 3 -->
+    <div id="tab3" class="diagram-card">
+      <h2 class="diagram-title">3. Production 6-Node Demo Pipeline DAG</h2>
+      <p class="diagram-desc">
+        The live workflow demonstrating lead research, ICP qualification, self-healing editorial review (Writer ↔ Reviewer), and outbound email dispatch.
+      </p>
+      <div class="mermaid-wrapper">
+        <div class="mermaid">
+flowchart LR
+    classDef nodeStyle fill:#1e293b,stroke:#38bdf8,stroke-width:2px,color:#fff;
+    classDef loopStyle fill:#3b2d14,stroke:#f59e0b,stroke-width:2px,color:#fff;
+    classDef branchStyle fill:#143026,stroke:#10b981,stroke-width:2px,color:#fff;
+
+    N1["<b>1. Trigger Manual</b><br/>(Lead Input)"]:::nodeStyle
+    N2["<b>2. Research Agent</b><br/>(WebSearch Tool)"]:::nodeStyle
+    N3["<b>3. Classifier Router</b><br/>(ICP Scoring 1-10)"]:::nodeStyle
+    N4["<b>4. Writer Agent</b><br/>(Drafts Outreach Copy)"]:::nodeStyle
+    N5["<b>5. Reviewer Agent</b><br/>(QA & Critique Gate)"]:::nodeStyle
+    N6["<b>6. Email Agent</b><br/>(SendGrid / Stub)"]:::nodeStyle
+    N_Unqual["<b>Discard / Log</b><br/>(Low Priority Lead)"]:::branchStyle
+
+    N1 -->|"Unconditional"| N2
+    N2 -->|"Pass Findings"| N3
+    
+    N3 -->|"score >= 7.0<br/>(Qualified Branch)"| N4
+    N3 -.->|"score < 7.0<br/>(Default Fallback)"| N_Unqual
+
+    N4 -->|"Initial Draft"| N5
+    
+    N5 ==>|"is_feedback=True<br/>not output.passed and score < 8<br/>[Editorial Revision Loop]"| N4
+    
+    N5 -->|"output.passed == True<br/>(Score >= 8.0 Approved)"| N6
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    mermaid.initialize({
+      startOnLoad: true,
+      theme: 'dark',
+      securityLevel: 'loose',
+      fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'
+    });
+
+    function showTab(tabId, btn) {
+      document.querySelectorAll('.diagram-card').forEach(card => card.classList.remove('active'));
+      document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+      document.getElementById(tabId).classList.add('active');
+      btn.classList.add('active');
+      mermaid.contentLoaded();
+    }
+  </script>
+</body>
+</html>

@@ -8,7 +8,6 @@ This is the critical test pattern: test the engine, mock the agents.
 """
 from __future__ import annotations
 
-import asyncio
 from typing import Any
 from unittest.mock import AsyncMock, patch
 from uuid import uuid4
@@ -221,7 +220,6 @@ class TestWorkflowRunner:
         self, parallel_workflow: WorkflowDef
     ) -> None:
         """Fan-out: B and C should both execute before D."""
-        executed_nodes: list[str] = []
         call_count = 0
 
         async def tracking_run(input_data, config, context, tools):

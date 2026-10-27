@@ -1,6 +1,7 @@
 """Quick test for Kimi API connectivity."""
 import asyncio
 import sys
+
 sys.path.insert(0, "src")
 
 async def test():
@@ -23,7 +24,7 @@ async def test():
         )
         print(f"  [OK] Response: {resp.content.strip()}")
         print(f"  Tokens: {resp.total_tokens}, Cost: ${resp.cost_usd:.6f}")
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001
         print(f"  [FAIL] Basic completion failed: {e}")
         return
 
@@ -41,7 +42,7 @@ async def test():
         )
         print(f"  [OK] Parsed: message={result.message!r}, status={result.status!r}")
         print(f"  Tokens: {resp2.total_tokens}")
-    except Exception as e:
+    except Exception as e:  # noqa: BLE001
         print(f"  [FAIL] Structured output failed: {e}")
         return
 

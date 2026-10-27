@@ -1,7 +1,7 @@
 """Manual Trigger agent — the entry point for user-initiated workflow runs."""
 from __future__ import annotations
 
-from typing import Any, ClassVar, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, ClassVar
 
 from agentflow.core.agents.base import BaseAgent
 from agentflow.core.schemas.workflow import (
@@ -36,8 +36,8 @@ class ManualTriggerAgent(BaseAgent):
         self,
         input_data: dict[str, Any],
         config: NodeConfig,
-        context: "RunContext",
-        tools: list["BaseTool"],
+        context: RunContext,
+        tools: list[BaseTool],
     ) -> AgentMessage:
         # Find this trigger's node_id from the workflow
         trigger_node_id = "trigger"

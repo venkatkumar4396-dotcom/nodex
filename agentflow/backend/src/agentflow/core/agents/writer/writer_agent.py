@@ -13,13 +13,14 @@ not as direct instructions to the model.
 """
 from __future__ import annotations
 
-from typing import Any, ClassVar, TYPE_CHECKING
-from pydantic import BaseModel, Field
+import re
+from typing import TYPE_CHECKING, Any, ClassVar
 
 import structlog
+from pydantic import BaseModel, Field
 
 from agentflow.core.agents.base import BaseAgent
-from agentflow.core.llm.structured import complete_structured, StructuredOutputError
+from agentflow.core.llm.structured import complete_structured
 from agentflow.core.schemas.workflow import (
     AgentMessage,
     AgentType,
@@ -70,17 +71,32 @@ class WriterAgent(BaseAgent):
         self,
         input_data: dict[str, Any],
         config: NodeConfig,
-        context: "RunContext",
-        tools: list["BaseTool"],
+        context: RunContext,
+        tools: list[BaseTool],
     ) -> AgentMessage:
+        # Fallback to trigger_data and context outputs if input_data is missing context
+        trigger = context.run.trigger_data or {}
+        lead_name = input_data.get("lead_name") or trigger.get("lead_name") or "Unknown"
+        company = input_data.get("company") or trigger.get("company") or "Unknown Company"
         summary = input_data.get("summary", "")
         key_findings = input_data.get("key_findings", [])
-        lead_name = input_data.get("lead_name", "Unknown")
-        company = input_data.get("company", "Unknown Company")
         score = input_data.get("score", 0)
         category = input_data.get("category", "unknown")
         recommendation = input_data.get("recommendation", "")
         validation_feedback = input_data.get("_validation_feedback")
+
+        if not summary:
+            for out in context.get_all_outputs().values():
+                if isinstance(out, dict) and out.get("summary"):
+                    summary = out["summary"]
+                    if not key_findings and out.get("key_findings"):
+                        key_findings = out["key_findings"]
+                    break
+
+        if (not lead_name or lead_name == "Unknown") and trigger.get("lead_name"):
+            lead_name = trigger["lead_name"]
+        if (not company or company == "Unknown Company") and trigger.get("company"):
+            company = trigger["company"]
 
         # Config-driven writing parameters
         tone = config.extra.get("tone", "professional")
@@ -124,22 +140,60 @@ Write a compelling, personalized email that:
 4. Stays under {max_words} words
 """
 
+        reviewer_feedback = input_data.get("feedback") or input_data.get("reviewer_feedback")
+        suggested_subject = input_data.get("revised_subject")
+
+        if reviewer_feedback:
+            user_content += f"""
+EDITORIAL REVISION REQUIRED:
+The previous draft was reviewed and received the following critique:
+"{reviewer_feedback}"
+"""
+            if suggested_subject:
+                user_content += f"Suggested subject line to consider: {suggested_subject}\n"
+            user_content += "Please revise the draft to address all the reviewer's feedback points."
+
         messages: list[dict[str, str]] = [
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": user_content},
         ]
 
-        try:
-            result, llm_resp = await complete_structured(
-                messages=messages,
-                output_model=WriterOutput,
-                model=config.model,
-                validation_feedback=validation_feedback,
-            )
-        except StructuredOutputError:
-            raise
+        result, llm_resp = await complete_structured(
+            messages=messages,
+            output_model=WriterOutput,
+            model=config.model,
+            validation_feedback=validation_feedback,
+        )
+
+        # Substitute any leftover raw template brackets in subject and body
+        body = result.body
+        subject = result.subject
+        if lead_name and lead_name != "Unknown":
+            first_name = lead_name.split()[0]
+            for pat in [
+                r"\{\{\s*(?:First\s*Name|first_name|Name|name)\s*\}\}",
+                r"\[\s*(?:First\s*Name|first_name|Name|name)\s*\]",
+            ]:
+                body = re.sub(pat, first_name, body, flags=re.IGNORECASE)
+                subject = re.sub(pat, first_name, subject, flags=re.IGNORECASE)
+            for pat in [
+                r"\{\{\s*(?:Full\s*Name|Lead\s*Name|lead_name)\s*\}\}",
+                r"\[\s*(?:Full\s*Name|Lead\s*Name|lead_name)\s*\]",
+            ]:
+                body = re.sub(pat, lead_name, body, flags=re.IGNORECASE)
+                subject = re.sub(pat, lead_name, subject, flags=re.IGNORECASE)
+
+        if company and company != "Unknown Company":
+            for pat in [
+                r"\{\{\s*(?:Company|company|Company\s*Name)\s*\}\}",
+                r"\[\s*(?:Company|company|Company\s*Name)\s*\]",
+            ]:
+                body = re.sub(pat, company, body, flags=re.IGNORECASE)
+                subject = re.sub(pat, company, subject, flags=re.IGNORECASE)
 
         output_data = result.model_dump()
+        output_data["body"] = body
+        output_data["subject"] = subject
         output_data.update({"lead_name": lead_name, "company": company})
 
         log.info(

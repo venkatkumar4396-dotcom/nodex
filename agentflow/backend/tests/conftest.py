@@ -1,19 +1,29 @@
 """Shared pytest fixtures for the AgentFlow test suite."""
 from __future__ import annotations
 
-import pytest
 from uuid import uuid4
 
+import pytest
+
+from agentflow.config import settings
+from agentflow.core.executor.context import RunContext
 from agentflow.core.schemas.workflow import (
     AgentType,
     EdgeDef,
     NodeConfig,
     NodeDef,
-    Position,
     RunRecord,
     WorkflowDef,
 )
-from agentflow.core.executor.context import RunContext
+
+
+@pytest.fixture(autouse=True)
+def mock_llm_for_tests():
+    """Ensure tests run against mock responses rather than calling external APIs."""
+    prev = settings.mock_llm
+    settings.mock_llm = True
+    yield
+    settings.mock_llm = prev
 
 
 @pytest.fixture

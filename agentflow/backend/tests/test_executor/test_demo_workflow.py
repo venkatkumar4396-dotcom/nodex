@@ -1,8 +1,6 @@
 """Tests for the demo workflow definition."""
 from __future__ import annotations
 
-import pytest
-
 from agentflow.core.executor.graph import build_execution_graph
 from agentflow.core.schemas.workflow import AgentType
 from agentflow.core.workflows.demo_workflow import build_demo_workflow

@@ -1,6 +1,8 @@
 """Tests for the graph topological sort and execution layer builder."""
 from __future__ import annotations
 
+from uuid import uuid4
+
 import pytest
 
 from agentflow.core.executor.graph import CycleDetectedError, build_execution_graph
@@ -11,7 +13,6 @@ from agentflow.core.schemas.workflow import (
     NodeDef,
     WorkflowDef,
 )
-from uuid import uuid4
 
 
 class TestBuildExecutionGraph:

@@ -14,11 +14,10 @@ from agentflow.core.schemas.workflow import (
     MessageMetadata,
     NodeRunRecord,
     NodeRunStatus,
+    RunRecord,
     RunStatus,
     WorkflowDef,
-    RunRecord,
 )
-from uuid import uuid4
 
 
 @pytest.fixture

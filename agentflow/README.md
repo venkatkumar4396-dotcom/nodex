@@ -44,13 +44,36 @@ pytest -v
 
 | Phase | Status | What it includes |
 |-------|--------|-----------------|
-| **Phase 1** | ✅ Complete | Workflow JSON schema + Python executor + 5 agents + 25 tests |
-| Phase 2 | 🔜 Next | Real tools (web search, HTTP, email) + structured output retries |
-| Phase 3 | 🔜 | Branching, parallel, loops, Writer↔Reviewer feedback loop |
-| Phase 4 | 🔜 | FastAPI + Postgres + Redis/Arq + WebSocket live events |
-| Phase 5 | 🔜 | React Flow editor (drag/drop, configure, run, watch) |
-| Phase 6 | 🔜 | Human Approval, Supervisor, RAG, Memory agents |
-| Phase 7 | 🔜 | NL workflow generation, templates, cost dashboard |
+| **Phase 1** | ✅ Complete | Workflow JSON schema + Python DAG executor + 5 core agents |
+| **Phase 2** | ✅ Complete | Real tools (Web Search, HTTP, Email), Credential Store, Structured output self-correction |
+| **Phase 3** | ✅ Complete | Advanced control flow: Multi-path branching, Default edges, Loops, Writer↔Reviewer feedback loop, Error routing |
+| **Phase 4** | ✅ Complete | Backend Services: FastAPI + SQLite persistence + Server-Sent Events (SSE) live streaming |
+| **Phase 5** | ✅ Complete | Frontend Studio: React Flow visual canvas, magnetic IN/OUT ports, Node/Edge Inspectors, live run pulses |
+| **Phase 6** | ✅ Complete | Specialized Agents: Human Approval Gate with pause/resume, Supervisor, RAG with citations, Memory |
+| **Phase 7** | ✅ Complete | Natural language AI workflow generator, Telemetry & Analytics dashboard, Run cancellation |
+
+## Running the Web Application
+
+### Option A: Run everything with one click (Windows)
+Double-click `run-all.bat` or run:
+```bat
+.\run-all.bat
+```
+
+### Option B: Run individually
+1. **Backend**:
+   ```powershell
+   cd backend
+   .venv\Scripts\python -m uvicorn agentflow.api.app:app --host 127.0.0.1 --port 8000
+   ```
+2. **Frontend**:
+   ```powershell
+   cd frontend
+   npm run dev
+   ```
+- **Web Canvas UI**: http://localhost:5173
+- **Interactive Swagger API Docs**: http://127.0.0.1:8000/docs
+- **Automated Test Suite (132 tests)**: `pytest` in `backend`
 
 ## Architecture
 
